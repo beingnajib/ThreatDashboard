@@ -3,7 +3,7 @@
 ![GitHub top language](https://img.shields.io/github/languages/top/beingnajib/ThreatDashboard)
 ![GitHub issues](https://img.shields.io/github/issues/beingnajib/ThreatDashboard)
 ![GitHub pull requests](https://img.shields.io/github/issues-pr/beingnajib/ThreatDashboard)
-![GitHub](https://img.shields.io/github/license/beingnajib/ThreatDashboard)
+![GitHub]()
 
 ThreatDashboard is a comprehensive project designed to import, analyze, and generate reports on various types of data. The backend of the project is built using Django CMS, while the frontend is developed using React, HTML5, and JavaScript.
 
