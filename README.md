@@ -5,10 +5,10 @@
 ![GitHub pull requests](https://img.shields.io/github/issues-pr/beingnajib/ThreatDashboard)
 ![GitHub](https://img.shields.io/github/license/beingnajib/ThreatDashboard)
 
-!GitHub issues
-!GitHub forks
-!GitHub stars
-!GitHub license
+[![GitHub issues](https://img.shields.io/github/issues/beingnajib/ThreatDashboard)](https://github.com/beingnajib/ThreatDashboard/issues)
+[![GitHub forks](https://img.shields.io/github/forks/beingnajib/ThreatDashboard)](https://github.com/beingnajib/ThreatDashboard/network)
+[![GitHub stars](https://img.shields.io/github/stars/beingnajib/ThreatDashboard)](https://github.com/beingnajib/ThreatDashboard/stargazers)
+[![GitHub license](https://img.shields.io/github/license/beingnajib/ThreatDashboard)](https://github.com/beingnajib/ThreatDashboard/blob/main/LICENSE)
 
 
 ThreatDashboard is a comprehensive project designed to import, analyze, and generate reports on various types of data. The backend of the project is built using Django CMS, while the frontend is developed using React, HTML5, and JavaScript.
