@@ -3,11 +3,11 @@
 ![GitHub top language](https://img.shields.io/github/languages/top/beingnajib/ThreatDashboard)
 ![GitHub issues](https://img.shields.io/github/issues/beingnajib/ThreatDashboard)
 ![GitHub pull requests](https://img.shields.io/github/issues-pr/beingnajib/ThreatDashboard)
-![GitHub](https://img.shields.io/github/license/beingnajib/ThreatDashboard)
-
-[![GitHub issues](https://img.shields.io/github/issues/beingnajib/ThreatDashboard)](https://github.com/beingnajib/ThreatDashboard/issues)
 [![GitHub forks](https://img.shields.io/github/forks/beingnajib/ThreatDashboard)](https://github.com/beingnajib/ThreatDashboard/network)
 [![GitHub stars](https://img.shields.io/github/stars/beingnajib/ThreatDashboard)](https://github.com/beingnajib/ThreatDashboard/stargazers)
+![GitHub](https://img.shields.io/github/license/beingnajib/ThreatDashboard)
+
+
 [![GitHub license](https://img.shields.io/github/license/beingnajib/ThreatDashboard)](https://github.com/beingnajib/ThreatDashboard/blob/main/LICENSE)
 
 
