@@ -11,6 +11,8 @@ ThreatDashboard is a threat monitoring, intelligence and response platform. It f
 - **Frontend:** React 18 + Vite + Chart.js
 - **Deployment:** Docker Compose (PostgreSQL, gunicorn API, scheduler worker, nginx)
 
+> 📘 **New here?** Read the [plain-English user guide](docs/USER_GUIDE.md). It covers every screen, step-by-step tasks, installation, every configuration setting, connecting your systems, backups and troubleshooting, with no technical background needed.
+
 ## Features
 
 ### Visibility and data integration
