@@ -31,6 +31,8 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements.txt
+      - name: Root requirements.txt (used by Vercel) matches backend/requirements.txt
+        run: diff <(grep -v '^#' ../requirements.txt | grep -v '^$') <(grep -v '^#' requirements.txt | grep -v '^$')
       - run: pip install -r requirements.txt pip-audit==2.10.1 bandit==1.9.4
       - name: Dependency vulnerability audit
         run: pip-audit -r requirements.txt

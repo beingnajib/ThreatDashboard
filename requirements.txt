@@ -1,0 +1,15 @@
+# Vercel installs Python dependencies from the project root. Keep this identical to
+# backend/requirements.txt (CI checks they match).
+Django==5.2.18
+djangorestframework==3.18.3
+django-filter==26.2
+django-cors-headers==4.9.0
+dj-database-url==3.1.2
+psycopg[binary]==3.3.6
+whitenoise==6.12.0
+gunicorn==26.2.0
+defusedxml==0.7.1
+reportlab==5.0.1
+python-docx==1.2.0
+openpyxl==3.1.5
+anthropic==1.15.0

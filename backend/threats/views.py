@@ -1,6 +1,8 @@
+import hmac
 import json
 import logging
 import os
+import time
 from datetime import timedelta
 
 from django.conf import settings
@@ -12,7 +14,13 @@ from django.utils import timezone
 from rest_framework import mixins, parsers, status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
-from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
+from rest_framework.decorators import (
+    action,
+    api_view,
+    authentication_classes,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -62,6 +70,8 @@ from .services.importers import RecordError, run_import
 from .services.ioc import IOCError, parse_indicator
 
 logger = logging.getLogger(__name__)
+# Leave headroom under a 60-second serverless limit for maintenance after feeds.
+CRON_FEED_BUDGET_SECONDS = 35
 
 
 # --------------------------------------------------------------------------- #
@@ -103,6 +113,37 @@ class LoginView(ObtainAuthToken):
         user.save(update_fields=["last_login"])
         audit(user, "auth.login")
         return Response({"token": token.key, "user": serializers.UserSerializer(user).data})
+
+
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([])
+def cron_run(request):
+    """Scheduled jobs for serverless hosts, which have no worker process.
+
+    Vercel Cron calls this with ``Authorization: Bearer $CRON_SECRET``. Due
+    feeds are pulled within a time budget, then maintenance runs (expiry, risk
+    decay, asset risk, compliance).
+    """
+    secret = settings.CRON_SECRET
+    supplied = request.META.get("HTTP_AUTHORIZATION", "")
+    if not secret or not hmac.compare_digest(supplied.encode(), f"Bearer {secret}".encode()):
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    from .management.commands.threat_maintenance import run_maintenance
+
+    started = time.monotonic()
+    pulled, skipped = [], []
+    feeds.ensure_default_feeds()
+    for feed in feeds.due_feeds():
+        if time.monotonic() - started > CRON_FEED_BUDGET_SECONDS:
+            skipped.append(feed.name)
+            continue
+        feeds.pull_feed(feed)
+        pulled.append({"feed": feed.name, "status": feed.last_status})
+    result = {"feeds": pulled, "feeds_deferred": skipped, "maintenance": run_maintenance()}
+    logger.info("Cron run: %s", result)
+    return Response(result)
 
 
 @api_view(["GET"])
@@ -397,7 +438,8 @@ class ImportJobViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
 
 class ReportViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.RetrieveModelMixin,
                     mixins.DestroyModelMixin, viewsets.GenericViewSet):
-    queryset = Report.objects.all()
+    # The stored file bytes are only loaded by the download action.
+    queryset = Report.objects.defer("content")
     serializer_class = serializers.ReportSerializer
     permission_classes = [IsAuthenticatedStaffDelete]
     filterset_fields = ["file_format"]
@@ -425,6 +467,11 @@ class ReportViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Retri
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
         report = self.get_object()
+        content_type = report_service.CONTENT_TYPES.get(report.file_format)
+        if report.content_filename:
+            response = HttpResponse(bytes(report.content or b""), content_type=content_type)
+            response["Content-Disposition"] = f'attachment; filename="{report.content_filename}"'
+            return response
         if not report.report_file:
             raise ValidationError("This report has no file.")
         try:
@@ -432,7 +479,7 @@ class ReportViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Retri
         except FileNotFoundError as exc:
             raise ValidationError("The report file is missing; regenerate the report.") from exc
         return FileResponse(handle, as_attachment=True, filename=os.path.basename(report.report_file.name),
-                            content_type=report_service.CONTENT_TYPES.get(report.file_format))
+                            content_type=content_type)
 
 
 # --------------------------------------------------------------------------- #

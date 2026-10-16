@@ -1,0 +1,47 @@
+# One-click database tasks for hosted deployments (Vercel + Neon, etc.).
+# Add a repository secret named DATABASE_URL (Settings → Secrets and variables →
+# Actions) with the production database connection string, then run this from
+# the Actions tab.
+name: Hosted database tasks
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: What to run
+        type: choice
+        options:
+          - migrate
+          - seed-demo-data
+          - run-maintenance
+        default: migrate
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Only used to satisfy settings; nothing is signed by these one-off tasks.
+      DJANGO_SECRET_KEY: github-actions-maintenance-only
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the DATABASE_URL secret is set
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Add a repository secret named DATABASE_URL first (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python manage.py migrate --noinput
+      - if: inputs.task == 'seed-demo-data'
+        run: python manage.py seed_demo
+      - if: inputs.task == 'run-maintenance'
+        run: python manage.py threat_maintenance
