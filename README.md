@@ -112,7 +112,8 @@ All settings are environment variables; see [`.env.example`](.env.example). The 
 | `DJANGO_SECRET_KEY` | Required whenever `DJANGO_DEBUG` is off |
 | `DATABASE_URL` | e.g. `postgres://user:pass@host:5432/db` (SQLite by default) |
 | `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `DJANGO_CORS_ALLOWED_ORIGINS` | Hosting |
-| `DJANGO_SECURE_COOKIES`, `DJANGO_SECURE_SSL_REDIRECT`, `DJANGO_SECURE_HSTS_SECONDS` | Turn on when served over HTTPS |
+| `DJANGO_SECURE_SSL_REDIRECT` | Set to `1` once served over HTTPS: nginx and Django redirect to HTTPS and send HSTS (`DJANGO_SECURE_HSTS_SECONDS`, default one year) |
+| `DJANGO_NUM_PROXIES` | Proxies appending to `X-Forwarded-For` in front of Django (default 1, the bundled nginx; add one per load balancer) |
 | `THREATDASH_ORG_DOMAINS` | Domains watched for typosquats and leaked credentials |
 | `THREATDASH_RESPONSE_CONNECTOR` / `_WEBHOOK_URL` / `_WEBHOOK_SECRET` | Response automation |
 | `ANTHROPIC_API_KEY`, `THREATDASH_NLQ_MODEL` | Optional Claude translation for natural-language queries (default model `claude-opus-5-5`) |
@@ -123,7 +124,9 @@ All settings are environment variables; see [`.env.example`](.env.example). The 
 - SSRF protection for outbound requests: feeds may only use http(s), every redirect hop is re-checked, and private, loopback and cloud-metadata addresses are refused unless `THREATDASH_FEED_ALLOW_PRIVATE_NETWORKS=1`. The response webhook refuses redirects.
 - URLs and ATT&CK IDs that get rendered as links are validated, so stored `javascript:` links are rejected.
 - Hardened XML parsing (`defusedxml`), upload size and row limits, rejection of nested-quantifier regexes in rules, and spreadsheet formula-injection escaping in CSV/XLSX exports.
-- Reports and the raw media directory are never served publicly. nginx sends CSP, `X-Frame-Options`, `nosniff` and a referrer policy.
+- Reports and the raw media directory are never served publicly. nginx sends CSP, `X-Frame-Options`, `nosniff` and a referrer policy on every response, including the SPA and its assets.
+- Rate limits and audit-log IPs use the address seen by the trusted proxy (`DJANGO_NUM_PROXIES`), so a client-supplied `X-Forwarded-For` can't evade the login throttle. Throttle counters live in a shared database cache table, so they hold across gunicorn workers and restarts.
+- TLS can end at a load balancer in front of nginx: nginx passes the load balancer's `X-Forwarded-Proto` through to Django.
 - Webhook calls are signed with HMAC-SHA256 (`X-ThreatDash-Signature`). A failed connector never marks a host as isolated.
 
 ## Project layout
