@@ -354,6 +354,7 @@ Choose one:
 
 - **Option A: Try it on your own computer** (10 minutes, includes demo data).
 - **Option B: Install on a server for real use** (recommended, uses Docker).
+- **Option C: Put a test instance online on Vercel** (no server needed, free tier, automatic HTTPS): see the separate [Vercel deployment guide](DEPLOY_VERCEL.md).
 
 ### 7.1 Option A — Try it on your own computer
 

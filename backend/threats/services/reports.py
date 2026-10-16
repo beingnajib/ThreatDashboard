@@ -6,6 +6,7 @@ from datetime import datetime, time, timedelta
 # saxutils.escape only escapes ReportLab markup; nothing is parsed.
 from xml.sax.saxutils import escape  # nosec B406
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
@@ -329,7 +330,10 @@ def generate_report(report):
         "critical_active": data["summary"]["totals"]["critical_active"],
         "size_bytes": len(content),
     }
-    report.report_file.save(filename, ContentFile(content), save=False)
+    if settings.THREATDASH_STORE_REPORTS_IN_DB:
+        report.content, report.content_filename = content, filename
+    else:
+        report.report_file.save(filename, ContentFile(content), save=False)
     report.save()
     return report
 

@@ -510,7 +510,7 @@ class ReportSerializer(serializers.ModelSerializer):
         read_only_fields = ["parameters", "summary", "created_at"]
 
     def get_download_url(self, obj):
-        if not obj.report_file:
+        if not obj.report_file and not obj.content_filename:
             return None
         return f"/api/reports/{obj.pk}/download/"
 

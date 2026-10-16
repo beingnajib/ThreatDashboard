@@ -60,6 +60,10 @@ docker compose exec backend python manage.py seed_demo   # optional demo dataset
 
 Open <http://localhost:8080>.
 
+### Vercel (quick online test instance)
+
+Serverless hosting with a free Neon Postgres database, your own domain and automatic HTTPS. Follow the step-by-step [Vercel deployment guide](docs/DEPLOY_VERCEL.md).
+
 ### Local development
 
 ```bash

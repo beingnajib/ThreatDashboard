@@ -30,5 +30,6 @@ urlpatterns = [
     path("analytics/summary/", views.analytics_summary, name="analytics-summary"),
     path("executive/summary/", views.executive_summary, name="executive-summary"),
     path("query/", views.natural_language_query, name="nl-query"),
+    path("cron/run/", views.cron_run, name="cron-run"),
     path("", include(router.urls)),
 ]

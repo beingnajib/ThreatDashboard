@@ -286,6 +286,9 @@ class Report(models.Model):
     parameters = models.JSONField(default=dict, blank=True)
     summary = models.JSONField(default=dict, blank=True, editable=False)
     report_file = models.FileField(upload_to="reports/%Y/%m/", blank=True)
+    # Used instead of report_file where there is no persistent disk (serverless).
+    content = models.BinaryField(null=True, blank=True, editable=False)
+    content_filename = models.CharField(max_length=255, blank=True, editable=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )

@@ -34,6 +34,9 @@ def env_int(name, default):
 
 TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
 DEBUG = env_bool("DJANGO_DEBUG", False)
+# Serverless hosting (Vercel sets VERCEL=1): no persistent disk, no background
+# worker, HTTPS always terminated by the platform.
+SERVERLESS = env_bool("THREATDASH_SERVERLESS", env_bool("VERCEL", False))
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
@@ -46,6 +49,12 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]")
 if TESTING:
     ALLOWED_HOSTS.append("testserver")
+# Vercel exposes the deployment, branch and production hostnames; trust them
+# automatically so preview and production URLs work without extra settings.
+PLATFORM_HOSTS = [
+    h for h in (os.environ.get(k, "") for k in ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL")) if h
+]
+ALLOWED_HOSTS += [h for h in PLATFORM_HOSTS if h not in ALLOWED_HOSTS]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -92,10 +101,18 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
+# Hosted Postgres integrations (e.g. Neon on Vercel) may only set POSTGRES_URL.
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL") or ""
+if SERVERLESS and not DATABASE_URL and not TESTING:
+    raise ImproperlyConfigured(
+        "Serverless deployments need a hosted database: set DATABASE_URL (or connect a Postgres "
+        "store such as Neon, which sets POSTGRES_URL). SQLite would be wiped on every cold start."
+    )
 DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=env_int("DATABASE_CONN_MAX_AGE", 60),
+    "default": dj_database_url.parse(
+        DATABASE_URL or f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        # Serverless functions are short-lived, so don't hold connections open.
+        conn_max_age=env_int("DATABASE_CONN_MAX_AGE", 0 if SERVERLESS else 60),
         conn_health_checks=True,
     )
 }
@@ -119,21 +136,27 @@ STORAGES = {
     "staticfiles": {
         "BACKEND": (
             "django.contrib.staticfiles.storage.StaticFilesStorage"
-            if DEBUG or TESTING
+            if DEBUG or TESTING or SERVERLESS
             else "whitenoise.storage.CompressedManifestStaticFilesStorage"
         )
     },
 }
+# Without a collectstatic step (serverless), WhiteNoise serves the admin's
+# assets straight from the installed apps.
+WHITENOISE_USE_FINDERS = SERVERLESS
 
 # Generated reports are stored here and served only through the authenticated
 # download endpoint, never as public media.
-MEDIA_ROOT = Path(os.environ.get("DJANGO_MEDIA_ROOT", BASE_DIR / "media"))
+MEDIA_ROOT = Path(os.environ.get("DJANGO_MEDIA_ROOT", "/tmp/threatdash-media" if SERVERLESS else BASE_DIR / "media"))  # nosec B108
+# Serverless instances have no shared disk, so generated reports live in the database.
+THREATDASH_STORE_REPORTS_IN_DB = env_bool("THREATDASH_STORE_REPORTS_IN_DB", SERVERLESS)
 MEDIA_URL = "media/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- Upload limits -----------------------------------------------------------
-THREATDASH_MAX_IMPORT_BYTES = env_int("THREATDASH_MAX_IMPORT_BYTES", 20 * 1024 * 1024)
+# Vercel caps request bodies at 4.5 MB, so serverless uploads default to 4 MB.
+THREATDASH_MAX_IMPORT_BYTES = env_int("THREATDASH_MAX_IMPORT_BYTES", (4 if SERVERLESS else 20) * 1024 * 1024)
 THREATDASH_MAX_IMPORT_ROWS = env_int("THREATDASH_MAX_IMPORT_ROWS", 100_000)
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = THREATDASH_MAX_IMPORT_BYTES + 1024 * 1024
@@ -158,6 +181,13 @@ THREATDASH_RESPONSE_CONNECTOR = os.environ.get("THREATDASH_RESPONSE_CONNECTOR", 
 THREATDASH_RESPONSE_WEBHOOK_URL = os.environ.get("THREATDASH_RESPONSE_WEBHOOK_URL", "")
 THREATDASH_RESPONSE_WEBHOOK_SECRET = os.environ.get("THREATDASH_RESPONSE_WEBHOOK_SECRET", "")
 THREATDASH_RESPONSE_TIMEOUT_SECONDS = env_int("THREATDASH_RESPONSE_TIMEOUT_SECONDS", 15)
+
+# Apply migrations and create DJANGO_SUPERUSER_* on cold start (no deploy hook on serverless).
+THREATDASH_AUTO_MIGRATE = env_bool("THREATDASH_AUTO_MIGRATE", SERVERLESS)
+
+# --- Serverless scheduling ---------------------------------------------------------
+# Vercel Cron calls /api/cron/run/ with "Authorization: Bearer $CRON_SECRET".
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
 
 # --- Threat feeds ------------------------------------------------------------
 THREATDASH_FEED_TIMEOUT_SECONDS = env_int("THREATDASH_FEED_TIMEOUT_SECONDS", 30)
@@ -204,6 +234,7 @@ if TESTING:
 # --- CORS / CSRF -------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = env_list("DJANGO_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+CSRF_TRUSTED_ORIGINS += [f"https://{h}" for h in PLATFORM_HOSTS if f"https://{h}" not in CSRF_TRUSTED_ORIGINS]
 
 # --- Security hardening ------------------------------------------------------
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -211,13 +242,13 @@ SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = env_bool("DJANGO_SECURE_COOKIES", not DEBUG and not TESTING)
+SESSION_COOKIE_SECURE = env_bool("DJANGO_SECURE_COOKIES", (not DEBUG and not TESTING) or SERVERLESS)
 CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
 SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", False)
 SECURE_HSTS_SECONDS = env_int("DJANGO_SECURE_HSTS_SECONDS", 0)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
 SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD", False)
-if env_bool("DJANGO_BEHIND_PROXY", False):
+if env_bool("DJANGO_BEHIND_PROXY", SERVERLESS):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     USE_X_FORWARDED_HOST = True
 
