@@ -1,7 +1,0 @@
-Django
-djangorestframework
-pandas
-matplotlib
-reportlab
-python-docx
-openpyxl
