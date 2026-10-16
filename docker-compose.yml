@@ -1,0 +1,61 @@
+# Production-style stack: PostgreSQL, Django API (gunicorn), scheduler worker
+# (feeds, risk decay, compliance, typosquat scans) and nginx serving the SPA.
+#   cp .env.example .env   # then set DJANGO_SECRET_KEY and POSTGRES_PASSWORD
+#   docker compose up -d --build
+#   docker compose exec backend python manage.py createsuperuser
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: threatdashboard
+      POSTGRES_USER: threatdashboard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U threatdashboard"]
+      interval: 10s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://threatdashboard:${POSTGRES_PASSWORD}@db:5432/threatdashboard
+      DJANGO_BEHIND_PROXY: "1"
+    volumes:
+      - media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://threatdashboard:${POSTGRES_PASSWORD}@db:5432/threatdashboard
+      DJANGO_MIGRATE_ON_START: "0"
+    command: ["python", "manage.py", "run_scheduler"]
+    healthcheck:
+      disable: true
+    volumes:
+      - media:/app/media
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  media:
