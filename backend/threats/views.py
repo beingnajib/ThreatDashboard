@@ -56,7 +56,7 @@ from .services import response as response_service
 from .services import rules as rule_service
 from .services import telemetry
 from .services.assets import asset_risk_breakdown, refresh_asset_risk
-from .services.audit import audit
+from .services.audit import audit, client_ip
 from .services.correlation import related_indicators
 from .services.importers import RecordError, run_import
 from .services.ioc import IOCError, parse_indicator
@@ -92,7 +92,7 @@ class LoginView(ObtainAuthToken):
         serializer = self.serializer_class(data=request.data, context={"request": request})
         if not serializer.is_valid():
             AuditLog.objects.create(actor_name=str(request.data.get("username", ""))[:150], action="auth.login_failed",
-                                    ip_address=request.META.get("REMOTE_ADDR"))
+                                    ip_address=client_ip(request))
             raise ValidationError(serializer.errors)
         user = serializer.validated_data["user"]
         token, _ = Token.objects.get_or_create(user=user)

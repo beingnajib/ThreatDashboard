@@ -4,15 +4,12 @@ from ..models import AuditLog
 def client_ip(request):
     if request is None:
         return None
-    # REMOTE_ADDR is set by the WSGI server; when DJANGO_BEHIND_PROXY is on the
-    # proxy is trusted to have overwritten X-Forwarded-For.
-    from django.conf import settings
+    # Same rule as the rate limiter: with DJANGO_BEHIND_PROXY on, the client IP is
+    # taken NUM_PROXIES entries from the right of X-Forwarded-For (entries the
+    # client added itself are ignored); otherwise REMOTE_ADDR.
+    from rest_framework.throttling import BaseThrottle
 
-    if getattr(settings, "USE_X_FORWARDED_HOST", False):
-        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-        if forwarded:
-            return forwarded.split(",")[0].strip() or None
-    return request.META.get("REMOTE_ADDR") or None
+    return BaseThrottle().get_ident(request) or None
 
 
 def audit(request_or_user, action, target="", **detail):

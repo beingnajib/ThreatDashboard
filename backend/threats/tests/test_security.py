@@ -149,3 +149,45 @@ class InputValidationTests(APIBase):
         ingest_events([{"domain": "endpoint", "event_type": "x", "mitre_technique": "<script>"},
                        {"domain": "endpoint", "event_type": "y", "mitre_technique": "t1059.001"}])
         self.assertEqual(sorted(TelemetryEvent.objects.values_list("mitre_technique", flat=True)), ["", "T1059.001"])
+
+
+class ClientIPTests(APIBase):
+    """The login throttle and audit log must key on the proxy-observed IP, not on client-set headers."""
+
+    def setUp(self):
+        super().setUp()
+        from django.core.cache import cache
+
+        cache.clear()
+        self.client.force_authenticate(None)
+
+    def _behind_proxy(self, num_proxies=1):
+        from django.conf import settings
+
+        return override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": num_proxies})
+
+    def test_spoofed_forwarded_for_does_not_bypass_login_throttle(self):
+        from threats.models import AuditLog
+
+        with self._behind_proxy():
+            codes = []
+            for i in range(12):
+                # nginx appends the address it saw (198.51.100.7) after whatever the client sent.
+                response = self.client.post("/api/auth/token/", {"username": "analyst", "password": "wrong"},
+                                            HTTP_X_FORWARDED_FOR=f"203.0.113.{i}, 198.51.100.7")
+                codes.append(response.status_code)
+        self.assertIn(429, codes)
+        ips = set(AuditLog.objects.filter(action="auth.login_failed").values_list("ip_address", flat=True))
+        self.assertEqual(ips, {"198.51.100.7"})
+
+    def test_forwarded_for_ignored_when_not_behind_proxy(self):
+        from django.test import RequestFactory
+
+        from threats.services.audit import client_ip
+
+        request = RequestFactory().get("/", HTTP_X_FORWARDED_FOR="203.0.113.9", REMOTE_ADDR="192.0.2.1")
+        with self._behind_proxy(0):
+            self.assertEqual(client_ip(request), "192.0.2.1")
+        with self._behind_proxy(2):
+            request.META["HTTP_X_FORWARDED_FOR"] = "6.6.6.6, 203.0.113.9, 10.0.0.2"
+            self.assertEqual(client_ip(request), "203.0.113.9")

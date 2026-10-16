@@ -214,12 +214,32 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = env_bool("DJANGO_SECURE_COOKIES", not DEBUG and not TESTING)
 CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
 SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", False)
-SECURE_HSTS_SECONDS = env_int("DJANGO_SECURE_HSTS_SECONDS", 0)
+# The container healthcheck calls the API over plain HTTP from inside the container.
+SECURE_REDIRECT_EXEMPT = [r"^api/health/$"]
+# Once HTTPS is enforced, send HSTS too unless explicitly configured otherwise.
+SECURE_HSTS_SECONDS = env_int("DJANGO_SECURE_HSTS_SECONDS", 31536000 if SECURE_SSL_REDIRECT else 0)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
 SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD", False)
-if env_bool("DJANGO_BEHIND_PROXY", False):
+BEHIND_PROXY = env_bool("DJANGO_BEHIND_PROXY", False)
+if BEHIND_PROXY:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     USE_X_FORWARDED_HOST = True
+# Number of trusted proxies that append to X-Forwarded-For (nginx = 1; add one per
+# load balancer in front of it). The client IP is read that many entries from the
+# right, so anything the client puts in the header itself is ignored. Used for
+# rate limiting and audit logging.
+REST_FRAMEWORK["NUM_PROXIES"] = env_int("DJANGO_NUM_PROXIES", 1) if BEHIND_PROXY else 0
+
+# --- Cache -------------------------------------------------------------------
+# Rate-limit counters must be shared by every gunicorn worker and survive
+# restarts, so production uses a database table (created by migration 0002).
+CACHES = {
+    "default": (
+        {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+        if TESTING
+        else {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "threatdash_cache"}
+    )
+}
 
 # --- Logging -----------------------------------------------------------------
 LOGGING = {
