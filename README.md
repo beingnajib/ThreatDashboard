@@ -119,7 +119,9 @@ All settings are environment variables; see [`.env.example`](.env.example). The 
 
 ## Security notes
 
-- Token and session authentication. Login is throttled (10/min) and failed logins are audited. Deletes, connectors, feeds and playbook edits require staff.
+- Token and session authentication. API tokens expire after `THREATDASH_TOKEN_TTL_HOURS` (default 12). Login is throttled (10/min), failed logins are audited, and log ingestion is rate-limited per connector. Deletes, connectors, feeds and playbook edits require staff.
+- SSRF protection for outbound requests: feeds may only use http(s), every redirect hop is re-checked, and private, loopback and cloud-metadata addresses are refused unless `THREATDASH_FEED_ALLOW_PRIVATE_NETWORKS=1`. The response webhook refuses redirects.
+- URLs and ATT&CK IDs that get rendered as links are validated, so stored `javascript:` links are rejected.
 - Hardened XML parsing (`defusedxml`), upload size and row limits, rejection of nested-quantifier regexes in rules, and spreadsheet formula-injection escaping in CSV/XLSX exports.
 - Reports and the raw media directory are never served publicly. nginx sends CSP, `X-Frame-Options`, `nosniff` and a referrer policy.
 - Webhook calls are signed with HMAC-SHA256 (`X-ThreatDash-Signature`). A failed connector never marks a host as isolated.
@@ -134,7 +136,7 @@ backend/
     services/             ioc, enrichment, scoring, importers, telemetry, incidents, attribution,
                           exposure, feeds, response, compliance, executive, analytics, nlq, reports, exports
     management/commands/  seed_demo, run_scheduler, pull_feeds, threat_maintenance
-    tests/                94 tests (services + API)
+    tests/                105 tests (services, API, security)
 frontend/
   src/pages/              17 screens (overview, executive, incidents, telemetry, assets, response, …)
   src/components/         attack-path graph, charts, tables, overlays
@@ -148,7 +150,7 @@ cd backend && python manage.py test threats        # SQLite, or set DATABASE_URL
 cd frontend && npm run lint && npm test && npm run build
 ```
 
-GitHub Actions runs the backend suite against PostgreSQL 16, plus the frontend lint, tests and build, on every push and pull request.
+GitHub Actions runs on every push and pull request: the backend suite against PostgreSQL 16, `pip-audit`, `bandit`, `npm audit`, and the frontend lint, tests and build.
 
 ## License
 

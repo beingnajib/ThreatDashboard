@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from ..models import Alert, Asset, DataConnector, Indicator, Severity, TelemetryDomain, TelemetryEvent
 from .importers import RecordError, parse_timestamp
-from .ioc import is_internal_ip, refang
+from .ioc import MITRE_RE, is_internal_ip, refang
 
 logger = logging.getLogger(__name__)
 
@@ -536,6 +536,8 @@ def ingest_events(payload, provider=DataConnector.Provider.GENERIC, connector=No
             except (RecordError, ValueError, TypeError, AttributeError) as exc:
                 errors.append({"index": index, "error": str(exc)[:300]})
                 continue
+            if data.get("mitre_technique") and not MITRE_RE.match(data["mitre_technique"]):
+                data["mitre_technique"] = ""
             if not data.get("provider"):
                 data["provider"] = str(provider)[:30]
             asset_info = data.pop("asset", None)

@@ -7,7 +7,7 @@ so assets, IoC matches, behavioural alerts and incidents are produced exactly
 as they would be in production.
 """
 import hashlib
-import random
+import random  # nosec B311
 import secrets
 from datetime import timedelta
 
@@ -106,7 +106,7 @@ class Command(BaseCommand):
                             help="Create 'admin' (staff), 'responder' and 'analyst' accounts with random passwords.")
 
     def handle(self, *args, **options):
-        rng = random.Random(options["seed"])
+        rng = random.Random(options["seed"])  # nosec B311
         now = timezone.now()
         if options["flush"]:
             for model in (Alert, Incident, TelemetryEvent, Asset, Indicator, DetectionRule, ExternalExposure,
@@ -177,7 +177,7 @@ class Command(BaseCommand):
                                        f"public MITRE ATT&CK reporting for demonstration.",
                 "references": [f"https://attack.mitre.org/groups/{spec['mitre_group_id']}/"]
                 if spec["mitre_group_id"] else [],
-                "last_activity": timezone.now().date() - timedelta(days=random.randint(3, 60)),
+                "last_activity": timezone.now().date() - timedelta(days=random.randint(3, 60)),  # nosec B311
             })
             actors.append(actor)
         return actors
@@ -411,11 +411,13 @@ class Command(BaseCommand):
         ]}, provider="azure_activity", connector=connectors["azure_activity"])
 
     def _external_risk(self, now):
+        # Fictional breach records (example.com) that exercise the leak pipeline; seed data
+        # uses the stdlib PRNG deliberately (reproducible demo, nothing security-sensitive).
         ingest_leaked_credentials([
-            {"email": "cfo@example.com", "password": "Winter2024!", "breach": "Combolist 2026-09"},
-            {"email": "user7@example.com", "password": "Summer#22", "breach": "Combolist 2026-09"},
+            {"email": "cfo@example.com", "password": "Winter2024!", "breach": "Combolist 2026-09"},  # nosec B105
+            {"email": "user7@example.com", "password": "Summer#22", "breach": "Combolist 2026-09"},  # nosec B105
             {"email": "admin@example.com", "breach": "SaaS vendor breach"},
-            {"email": "someone@other.example", "password": "x", "breach": "Combolist 2026-09"},
+            {"email": "someone@other.example", "password": "x", "breach": "Combolist 2026-09"},  # nosec B105
         ], source="breach-monitoring", domains=["example.com"])
         ingest_dark_web([
             {"title": "Initial access to 'Example Corp' VPN offered on access-broker forum", "kind": "dark_web_mention",

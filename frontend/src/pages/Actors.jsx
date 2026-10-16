@@ -45,7 +45,9 @@ export default function Actors() {
             <dt>Targets</dt><dd>{selected.target_sectors.join(", ") || "—"}</dd>
             <dt>Last activity</dt><dd>{formatDate(selected.last_activity, false)}</dd>
             <dt>Techniques</dt><dd><Techniques items={selected.mitre_techniques} max={30} /></dd>
-            <dt>References</dt><dd>{selected.references.map((r) => <div key={r}><a href={r} target="_blank" rel="noreferrer noopener">{r}</a></div>)}</dd>
+            <dt>References</dt><dd>{selected.references.map((r) => (
+              <div key={r}>{/^https?:\/\//i.test(r) ? <a href={r} target="_blank" rel="noreferrer noopener">{r}</a> : r}</div>
+            ))}</dd>
           </dl>
           <Card title={`Attributed infrastructure (${iocs.data?.length ?? 0})`} flush>
             <div className="card-body stack" style={{ gap: 6 }}>

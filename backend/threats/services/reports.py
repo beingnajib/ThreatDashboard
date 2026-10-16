@@ -3,7 +3,8 @@ import csv
 import io
 import json
 from datetime import datetime, time, timedelta
-from xml.sax.saxutils import escape
+# saxutils.escape only escapes ReportLab markup; nothing is parsed.
+from xml.sax.saxutils import escape  # nosec B406
 
 from django.core.files.base import ContentFile
 from django.core.serializers.json import DjangoJSONEncoder

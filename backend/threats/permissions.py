@@ -1,5 +1,9 @@
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
-from rest_framework import authentication, exceptions, permissions
+from django.utils import timezone
+from rest_framework import authentication, exceptions, permissions, throttling
 
 from .models import DataConnector
 
@@ -76,3 +80,34 @@ class IsAuthenticatedOrConnector(permissions.BasePermission):
         if isinstance(request.auth, DataConnector):
             return True
         return bool(request.user and request.user.is_authenticated)
+
+
+def token_expired(token):
+    ttl = settings.THREATDASH_TOKEN_TTL_HOURS
+    return bool(ttl) and token.created < timezone.now() - timedelta(hours=ttl)
+
+
+class ExpiringTokenAuthentication(authentication.TokenAuthentication):
+    """DRF token auth with a maximum token age; expired tokens are deleted."""
+
+    def authenticate_credentials(self, key):
+        user, token = super().authenticate_credentials(key)
+        if token_expired(token):
+            token.delete()
+            raise exceptions.AuthenticationFailed("Session expired; sign in again.")
+        return user, token
+
+
+class IngestRateThrottle(throttling.SimpleRateThrottle):
+    """Per-connector (or per-user) rate limit for the telemetry ingestion endpoint."""
+
+    scope = "ingest"
+
+    def get_cache_key(self, request, view):
+        if isinstance(request.auth, DataConnector):
+            ident = f"connector-{request.auth.pk}"
+        elif request.user and request.user.is_authenticated:
+            ident = f"user-{request.user.pk}"
+        else:
+            ident = self.get_ident(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}
