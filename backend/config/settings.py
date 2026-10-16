@@ -38,7 +38,8 @@ DEBUG = env_bool("DJANGO_DEBUG", False)
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
     if DEBUG or TESTING:
-        SECRET_KEY = "django-insecure-development-key-do-not-use-in-production"
+        # Development/test-only fallback; production refuses to start without a key.
+        SECRET_KEY = "django-insecure-development-key-do-not-use-in-production"  # nosec B105
     else:
         raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is off.")
 
@@ -137,6 +138,10 @@ THREATDASH_MAX_IMPORT_ROWS = env_int("THREATDASH_MAX_IMPORT_ROWS", 100_000)
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = THREATDASH_MAX_IMPORT_BYTES + 1024 * 1024
 
+# --- API tokens ----------------------------------------------------------------
+# Tokens older than this are rejected and must be renewed by signing in (0 = never).
+THREATDASH_TOKEN_TTL_HOURS = env_int("THREATDASH_TOKEN_TTL_HOURS", 12)
+
 # --- Threat scoring ----------------------------------------------------------
 THREATDASH_RISK_HALF_LIFE_DAYS = env_int("THREATDASH_RISK_HALF_LIFE_DAYS", 30)
 THREATDASH_DEFAULT_INDICATOR_TTL_DAYS = env_int("THREATDASH_DEFAULT_INDICATOR_TTL_DAYS", 90)
@@ -157,6 +162,8 @@ THREATDASH_RESPONSE_TIMEOUT_SECONDS = env_int("THREATDASH_RESPONSE_TIMEOUT_SECON
 # --- Threat feeds ------------------------------------------------------------
 THREATDASH_FEED_TIMEOUT_SECONDS = env_int("THREATDASH_FEED_TIMEOUT_SECONDS", 30)
 THREATDASH_FEED_MAX_BYTES = env_int("THREATDASH_FEED_MAX_BYTES", 50 * 1024 * 1024)
+# Feeds may not target private/loopback/link-local addresses (SSRF guard) unless enabled.
+THREATDASH_FEED_ALLOW_PRIVATE_NETWORKS = env_bool("THREATDASH_FEED_ALLOW_PRIVATE_NETWORKS", False)
 
 # --- Natural-language query (optional LLM translation) -----------------------
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -165,7 +172,7 @@ THREATDASH_NLQ_MODEL = os.environ.get("THREATDASH_NLQ_MODEL", "claude-opus-5-5")
 # --- Django REST framework ---------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
+        "threats.permissions.ExpiringTokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
@@ -184,6 +191,7 @@ REST_FRAMEWORK = {
         "anon": os.environ.get("THREATDASH_THROTTLE_ANON", "30/min"),
         "user": os.environ.get("THREATDASH_THROTTLE_USER", "600/min"),
         "login": os.environ.get("THREATDASH_THROTTLE_LOGIN", "10/min"),
+        "ingest": os.environ.get("THREATDASH_THROTTLE_INGEST", "600/min"),
     },
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"]
     + (["rest_framework.renderers.BrowsableAPIRenderer"] if DEBUG else []),

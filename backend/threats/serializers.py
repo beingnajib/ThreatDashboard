@@ -343,6 +343,17 @@ class ThreatActorSerializer(serializers.ModelSerializer):
     def validate_target_sectors(self, value):
         return _string_list(value, "target_sectors")
 
+    def validate_references(self, value):
+        # Rendered as links in the UI, so only plain web URLs are accepted
+        # (blocks javascript:, data: and similar stored-XSS payloads).
+        url = serializers.URLField(max_length=1000)
+        clean = []
+        for item in _string_list(value, "references"):
+            if not item.lower().startswith(("https://", "http://")):
+                raise serializers.ValidationError("References must be http(s) URLs.")
+            clean.append(url.run_validation(item))
+        return clean[:50]
+
 
 class ExternalExposureSerializer(serializers.ModelSerializer):
     class Meta:

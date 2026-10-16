@@ -24,6 +24,7 @@ from django.utils import timezone
 
 from ..models import Asset, Indicator, Playbook, ResponseAction, TelemetryEvent
 from .audit import audit
+from .netsafety import safe_urlopen
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +144,9 @@ class SimulatedConnector:
             return True, "\n".join(rows)
         if verb == "netstat":
             conns = [(e.dst_ip, e.dst_port) for e in events if e.dst_ip][:20]
+            # Simulated netstat output; the "0.0.0.0" below is display text, not a bind address.
             rows = ["Proto  Local Address          Foreign Address        State"]
-            rows += [f"TCP    {asset.ip_address or '0.0.0.0'}:{49152 + i:<10} {ip}:{port or 443:<14} ESTABLISHED"
+            rows += [f"TCP    {asset.ip_address or '0.0.0.0'}:{49152 + i:<10} {ip}:{port or 443:<14} ESTABLISHED"  # nosec B104
                      for i, (ip, port) in enumerate(conns)] or ["(no active connections)"]
             return True, "\n".join(rows)
         if verb in ("ipconfig",):
@@ -206,7 +208,11 @@ class WebhookConnector:
             "User-Agent": "ThreatDashboard-Response/2.0",
         })
         try:
-            with urllib.request.urlopen(request, timeout=settings.THREATDASH_RESPONSE_TIMEOUT_SECONDS) as resp:  # noqa: S310
+            # The webhook is operator-configured and usually internal, so private
+            # addresses are allowed, but redirects (which could re-target the
+            # signed request) are not.
+            with safe_urlopen(request, timeout=settings.THREATDASH_RESPONSE_TIMEOUT_SECONDS,
+                              allow_private=True, max_redirects=0) as resp:
                 reply = json.loads(resp.read(1024 * 1024) or b"{}")
         except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
             raise ResponseError(f"Response connector error: {exc}") from exc

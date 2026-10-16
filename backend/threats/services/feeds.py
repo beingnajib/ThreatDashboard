@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from ..models import ImportJob, Source, ThreatFeed
 from .importers import run_import
+from .netsafety import UnsafeURLError, safe_urlopen
 
 logger = logging.getLogger(__name__)
 
@@ -40,16 +41,17 @@ def ensure_default_feeds():
 
 
 def fetch(feed):
-    if not feed.url.lower().startswith(("https://", "http://")):
-        raise FeedError("Only http(s) feed URLs are supported.")
     request = urllib.request.Request(feed.url, headers={"User-Agent": USER_AGENT})
     if feed.auth_header and ":" in feed.auth_header:
         name, _, value = feed.auth_header.partition(":")
         request.add_header(name.strip(), value.strip())
     limit = settings.THREATDASH_FEED_MAX_BYTES
     try:
-        with urllib.request.urlopen(request, timeout=settings.THREATDASH_FEED_TIMEOUT_SECONDS) as response:  # noqa: S310
+        with safe_urlopen(request, timeout=settings.THREATDASH_FEED_TIMEOUT_SECONDS,
+                          allow_private=settings.THREATDASH_FEED_ALLOW_PRIVATE_NETWORKS) as response:
             body = response.read(limit + 1)
+    except UnsafeURLError as exc:
+        raise FeedError(f"Blocked: {exc}") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise FeedError(f"Download failed: {exc}") from exc
     if len(body) > limit:

@@ -43,10 +43,12 @@ from .permissions import (
     CanRespond,
     CanUseTerminal,
     ConnectorKeyAuthentication,
+    IngestRateThrottle,
     IsAuthenticatedOrConnector,
     IsAuthenticatedStaffDelete,
     IsStaff,
     IsStaffOrReadOnly,
+    token_expired,
 )
 from .services import analytics, attribution, compliance, executive, exports, exposure, feeds, incidents, nlq
 from .services import reports as report_service
@@ -94,6 +96,9 @@ class LoginView(ObtainAuthToken):
             raise ValidationError(serializer.errors)
         user = serializer.validated_data["user"]
         token, _ = Token.objects.get_or_create(user=user)
+        if token_expired(token):
+            token.delete()
+            token = Token.objects.create(user=user)
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])
         audit(user, "auth.login")
@@ -472,7 +477,7 @@ class TelemetryEventViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, vi
 
     @action(detail=False, methods=["post"], authentication_classes=[ConnectorKeyAuthentication] + [
         cls for cls in viewsets.GenericViewSet.authentication_classes], permission_classes=[IsAuthenticatedOrConnector],
-        throttle_classes=[])
+        throttle_classes=[IngestRateThrottle])
     def ingest(self, request):
         """Push events. Log shippers authenticate with their connector's ``X-Ingest-Key``."""
         connector = request.auth if isinstance(request.auth, DataConnector) else None

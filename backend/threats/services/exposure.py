@@ -147,7 +147,8 @@ def scan_typosquats(domains=None, resolve=False, max_lookups=400, timeout=20):
 
 
 def _sha1_prefix(secret):
-    return hashlib.sha1(secret.encode("utf-8", "replace")).hexdigest()[:5].upper()  # noqa: S324 - k-anonymity only
+    # k-anonymity prefix only (as used by breach-lookup services), never a password hash.
+    return hashlib.sha1(secret.encode("utf-8", "replace"), usedforsecurity=False).hexdigest()[:5].upper()
 
 
 def _mask_email(email):
